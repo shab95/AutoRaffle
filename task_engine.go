@@ -22,6 +22,18 @@ func DetermineProxy(proxy string) string {
 	return UserPass
 }
 
+func GenerateProxyParts(proxy string) (host, port, user, pass string) {
+	firstColon := strings.Index(proxy, ":")
+	secondColon := FindMiddleColon(proxy)
+	thirdColon := strings.LastIndex(proxy, ":")
+
+	host = proxy[:firstColon]
+	port = proxy[firstColon+1 : secondColon]
+	user = proxy[secondColon+1 : thirdColon]
+	pass = proxy[thirdColon+1:]
+	return
+}
+
 func FindMiddleColon(proxy string) int {
 	lastColonIndex := strings.LastIndex(proxy, ":")
 	middleColonIndex := strings.LastIndex(proxy[:lastColonIndex], ":")
@@ -29,15 +41,14 @@ func FindMiddleColon(proxy string) int {
 }
 
 func ProxyConfig(proxy string) *url.URL {
-	var hostPort string
-
+	configProxy := "http://" + proxy
 	if DetermineProxy(proxy) == UserPass {
-		hostPort = proxy[:FindMiddleColon(proxy)]
-	} else {
-		hostPort = proxy
+
+		host, port, user, pass := GenerateProxyParts(proxy)
+		configProxy = "http://" + user + ":" + pass + "@" + host + ":" + port
+
 	}
 
-	configProxy := "http://" + hostPort
 	proxyURL, err := url.Parse(configProxy)
 	if err != nil {
 		log.Fatal(err)
@@ -47,7 +58,7 @@ func ProxyConfig(proxy string) *url.URL {
 
 func CreateBasicAuth(proxy string) string {
 	auth := proxy[FindMiddleColon(proxy)+1:]
-	basicAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte(auth))
+	basicAuth := base64.StdEncoding.EncodeToString([]byte(auth))
 	return basicAuth
 }
 
@@ -61,11 +72,12 @@ func SiteConfig() *url.URL {
 
 func TransportSetup(proxyURL *url.URL, proxy string) *http.Transport {
 	if DetermineProxy(proxy) == UserPass {
-		hdr := http.Header{}
-		hdr.Add("Proxy-Authorization", CreateBasicAuth(proxy))
+		// hdr := http.Header{}
+		// hdr.Add("Proxy-Authorization", CreateBasicAuth(proxy))
 		transport := &http.Transport{
-			Proxy:              http.ProxyURL(proxyURL),
-			ProxyConnectHeader: hdr,
+			Proxy: http.ProxyURL(proxyURL),
+			// ProxyConnectHeader: hdr,
+			// TLSClientConfig:    &tls.Config{InsecureSkipVerify: true},
 		}
 		return transport
 	}
@@ -94,10 +106,9 @@ func ClientSetup(jar *cookiejar.Jar, transport *http.Transport) *http.Client {
 func RequestSetup(siteURL *url.URL, proxy string) *http.Request {
 	req, _ := http.NewRequest("GET", siteURL.String(), nil)
 	//Add headers here
-	if DetermineProxy(proxy) == UserPass {
-		req.Header.Add("Accept-Encoding", "identity")
-		req.Header.Add("Proxy-Authorization", CreateBasicAuth(proxy))
-	}
+	// if DetermineProxy(proxy) == UserPass {
+	// 	req.Header.Add("Proxy-Authorization", CreateBasicAuth(proxy))
+	// }
 
 	return req
 }

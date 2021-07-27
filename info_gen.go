@@ -102,7 +102,7 @@ func sizeGen() float32 {
 func InfoGen() []Info {
 	emails := RetrieveEmails()
 	proxies := retrieveProxies()
-	proxies = ClearUserPass(proxies)
+	//proxies = ClearUserPass(proxies)
 	var infoSlice []Info
 
 	for i, email := range emails {

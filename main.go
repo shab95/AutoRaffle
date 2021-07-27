@@ -14,6 +14,7 @@ func main() {
 	//if fail, move onto next struct and keep list of failed gmails
 
 	infoSlice := InfoGen()
-	TaskEngine(infoSlice)
-
+	entries := TaskEngine(infoSlice)
+	GetStats(entries)
+	SendResults(entries)
 }

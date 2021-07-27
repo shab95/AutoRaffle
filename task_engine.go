@@ -7,13 +7,19 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"strings"
+	"time"
 )
 
 const (
 	IpAuth   = "ip auth"
 	UserPass = "user pass"
-	SiteUrl  = "https://www.google.com/"
+	SiteUrl  = "https://api.ipify.org?format=json"
 )
+
+type Entries struct {
+	ConfirmedEntries int
+	FailedEntries    int
+}
 
 func DetermineProxy(proxy string) string {
 	if strings.Count(proxy, ":") == 1 {
@@ -43,12 +49,9 @@ func FindMiddleColon(proxy string) int {
 func ProxyConfig(proxy string) *url.URL {
 	configProxy := "http://" + proxy
 	if DetermineProxy(proxy) == UserPass {
-
 		host, port, user, pass := GenerateProxyParts(proxy)
 		configProxy = "http://" + user + ":" + pass + "@" + host + ":" + port
-
 	}
-
 	proxyURL, err := url.Parse(configProxy)
 	if err != nil {
 		log.Fatal(err)
@@ -72,24 +75,14 @@ func SiteConfig() *url.URL {
 
 func TransportSetup(proxyURL *url.URL, proxy string) *http.Transport {
 	if DetermineProxy(proxy) == UserPass {
-		// hdr := http.Header{}
-		// hdr.Add("Proxy-Authorization", CreateBasicAuth(proxy))
 		transport := &http.Transport{
 			Proxy: http.ProxyURL(proxyURL),
-			// ProxyConnectHeader: hdr,
-			// TLSClientConfig:    &tls.Config{InsecureSkipVerify: true},
 		}
 		return transport
 	}
 	transport := &http.Transport{
 		Proxy: http.ProxyURL(proxyURL),
 	}
-	// if DetermineProxy(proxy) == UserPass {
-	// 	log.Println("This entry requires user-pass authentication...")
-	// 	basicAuth := CreateBasicAuth(proxy)
-	// 	transport.ProxyConnectHeader = http.Header{}
-	// 	transport.ProxyConnectHeader.Add("Proxy-Authorization", basicAuth)
-	// }
 
 	return transport
 }
@@ -98,6 +91,7 @@ func ClientSetup(jar *cookiejar.Jar, transport *http.Transport) *http.Client {
 	client := &http.Client{
 		Jar:       jar,
 		Transport: transport,
+		Timeout:   10 * time.Second,
 	}
 
 	return client
@@ -106,9 +100,6 @@ func ClientSetup(jar *cookiejar.Jar, transport *http.Transport) *http.Client {
 func RequestSetup(siteURL *url.URL, proxy string) *http.Request {
 	req, _ := http.NewRequest("GET", siteURL.String(), nil)
 	//Add headers here
-	// if DetermineProxy(proxy) == UserPass {
-	// 	req.Header.Add("Proxy-Authorization", CreateBasicAuth(proxy))
-	// }
 
 	return req
 }
@@ -129,7 +120,20 @@ func DoAndGet(infoStruct *Info, client *http.Client, req *http.Request, proxy st
 	return resp
 }
 
-func TaskEngine(infoSlice []Info) {
+func CheckAndReport(infoStruct *Info, resp *http.Response, entriesStruct *Entries) {
+	log.Println("Entered:", infoStruct.entered, "\nemail: ", infoStruct.email, "\nproxy: ", infoStruct.proxy, "\nstatus: ", resp.StatusCode)
+	log.Println("*************************")
+	if infoStruct.entered {
+		entriesStruct.ConfirmedEntries++
+		return
+	}
+	entriesStruct.FailedEntries++
+	WriteFailure(infoStruct.email)
+}
+
+func TaskEngine(infoSlice []Info) *Entries {
+	entriesStruct := Entries{}
+
 	for _, infoStruct := range infoSlice {
 		//proxy url setup
 		proxyURL := ProxyConfig(infoStruct.proxy)
@@ -151,9 +155,8 @@ func TaskEngine(infoSlice []Info) {
 
 		//DoAndGetStatus
 		resp := DoAndGet(&infoStruct, client, req, infoStruct.proxy)
-
-		log.Println("Entered:", infoStruct.entered, "\nemail: ", infoStruct.email, "\nproxy: ", infoStruct.proxy, "\nstatus: ", resp.StatusCode)
-		log.Println("*************************")
+		CheckAndReport(&infoStruct, resp, &entriesStruct)
 	}
 
+	return &entriesStruct
 }

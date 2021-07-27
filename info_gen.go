@@ -5,7 +5,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
-	"strconv"
+	"strings"
 
 	"github.com/Pallinder/go-randomdata"
 )
@@ -15,15 +15,27 @@ type Info struct {
 	firstName string
 	lastName  string
 	zipCode   int
-	phone     int
+	phone     string
 	size      float32
 	proxy     string
+	entered   bool
 }
 
 func checkErr(e error) {
 	if e != nil {
 		log.Fatalln(e)
 	}
+}
+
+func ClearUserPass(proxySlice []string) []string {
+	count := 0
+	for i, proxy := range proxySlice {
+		if strings.Count(proxy, ":") > 1 {
+			proxySlice = append(proxySlice[:i-count], proxySlice[i+1-count:]...)
+			count++
+		}
+	}
+	return proxySlice
 }
 
 func RetrieveEmails() []string {
@@ -45,7 +57,7 @@ func RetrieveEmails() []string {
 func retrieveProxies() []string {
 	var proxies []string
 
-	file, err := os.Open("emails")
+	file, err := os.Open("proxies")
 	checkErr(err)
 	defer file.Close()
 
@@ -70,13 +82,14 @@ func lastNameGen() string {
 }
 
 func zipCodeGen() int {
-	zip, _ := strconv.Atoi(randomdata.PostalCode("US"))
-	return zip
+	return 20800 + randomdata.Number(10, 99)
 }
 
-func phoneGen() int {
-	num, _ := strconv.Atoi(randomdata.PhoneNumber())
-	return num
+func phoneGen() string {
+	if randomdata.Number(2)%2 == 0 {
+		return "240" + randomdata.StringNumberExt(1, "", 7)
+	}
+	return "301" + randomdata.StringNumberExt(1, "", 7)
 }
 
 func sizeGen() float32 {
@@ -85,9 +98,11 @@ func sizeGen() float32 {
 	return sizes[randInd]
 }
 
+//Infogen: Creates a slice of structs with info for raffle entries
 func InfoGen() []Info {
 	emails := RetrieveEmails()
 	proxies := retrieveProxies()
+	proxies = ClearUserPass(proxies)
 	var infoSlice []Info
 
 	for i, email := range emails {
@@ -95,7 +110,6 @@ func InfoGen() []Info {
 		newInfo.email = email
 		newInfo.firstName = firstNameGen()
 		newInfo.lastName = lastNameGen()
-		newInfo.phone = phoneGen()
 		newInfo.zipCode = zipCodeGen()
 		newInfo.phone = phoneGen()
 		newInfo.size = sizeGen()
